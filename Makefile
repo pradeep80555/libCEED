@@ -59,6 +59,8 @@ MAGMA_DIR ?= ../magma
 # env variable CUTLASS_DIR can be used too
 CUTLASS_DIR ?= ../cutlass
 
+# env variable to point the location of KOKKOS installation built with CUDA
+KOKKOS_DIR ?=
 
 # ------------------------------------------------------------
 # Compiler flags
@@ -429,6 +431,8 @@ magma.h        := $(sort $(wildcard backends/magma/*.h))
 magma.hpp      := $(sort $(wildcard backends/magma/*.hpp))
 cutlass.c      := $(sort $(wildcard backends/cutlass/*.c))
 cutlass.h      := $(sort $(wildcard backends/cutlass/*.h))
+kokkos.cpp     := $(sort $(wildcard backends/kokkos/*.cpp))
+kokkos.hpp     := $(sort $(wildcard backends/kokkos/*.hpp))
 
 # Tests
 tests.c := $(sort $(wildcard tests/t[0-9][0-9][0-9]-*.c))
@@ -550,7 +554,8 @@ info:
 	$(info ROCM_DIR      = $(ROCM_DIR)$(call backend_status,$(HIP_BACKENDS)))
 	$(info SYCL_DIR      = $(SYCL_DIR)$(call backend_status,$(SYCL_BACKENDS)))
 	$(info MAGMA_DIR     = $(MAGMA_DIR)$(call backend_status,$(MAGMA_BACKENDS)))
-	$(info CUTLASS_DIR   = $(CUTLASS_DIR)$(call backend_status,$(CUTLASS_BACKENDS)))
+	$(info CUTLASS_DIR   = $(CUTLASS_DIR)$(call backend_status,$(CUTLASS_BACKENDS)))    
+	$(info KOKKOS_DIR    = $(KOKKOS_DIR)$(call backend_status,$(KOKKOS_BACKENDS)))
 	$(info )
 	$(info -----------------------------------------)
 	$(info )
@@ -850,6 +855,22 @@ endif
 BACKENDS_MAKE += $(CUTLASS_BACKENDS)
 
 CPPFLAGS += -DCEED_CPU_LINK_ARGS='$(CEED_CPU_LINK_ARGS)'
+
+# Kokkos Backend (requires Kokkos built with CUDA)
+KOKKOS_CUDA := $(shell grep -qsE '^$(HASH)define KOKKOS_ENABLE_CUDA( |$$)' $(KOKKOS_DIR)/include/KokkosCore_config.h && echo 1) # looks for '#define KOKKOS_ENABLE_CUDA' in the kokkos config file
+ifneq ($(and $(KOKKOS_CUDA),$(CUDA_LIB_DIR)),) # enters inside if kokkos has cuda enabled & cuda is installed
+  KOKKOS_CXXFLAGS ?= -std=c++20 --extended-lambda # extra compiler flags
+  kokkos.o := $(kokkos.cpp:%.cpp=$(OBJDIR)/%.o) # converting the list of kokkos .cpp backend files to .o, so that we can append the nvcc_wrapper
+  $(kokkos.o) : CXX := $(abspath $(KOKKOS_DIR))/bin/nvcc_wrapper
+  $(kokkos.o) : CXXFLAGS := $(filter-out -std=c++11,$(CXXFLAGS)) $(KOKKOS_CXXFLAGS)
+  $(kokkos.o) $(kokkos.cpp:%=%.tidy) $(kokkos.cpp:%=%.tidy-fix) $(kokkos.hpp:%=%.tidy-fix) : CPPFLAGS += -isystem $(abspath $(KOKKOS_DIR))/include $(CUDA_CPPFLAGS)
+  PKG_LIBS            += -L$(abspath $(KOKKOS_DIR))/lib -L$(abspath $(KOKKOS_DIR))/lib64 -lkokkoscontainers -lkokkoscore -ldl
+  LIBCEED_CONTAINS_CXX = 1
+  libceed.cpp         += $(kokkos.cpp)
+  libceed.hpp         += $(kokkos.hpp)
+  KOKKOS_BACKENDS      = /gpu/cuda/kokkos
+endif
+BACKENDS_MAKE += $(KOKKOS_BACKENDS)
 
 BACKENDS ?= $(BACKENDS_MAKE)
 export BACKENDS
@@ -1282,7 +1303,9 @@ print :
 CONFIG_VARS = CC CXX FC NVCC NVCC_CXX HIPCC \
   OPT CFLAGS CPPFLAGS CXXFLAGS FFLAGS NVCCFLAGS HIPCCFLAGS SYCLFLAGS \
   AR ARFLAGS LDFLAGS LDLIBS LIBCXX SED \
-  MAGMA_DIR CUTLASS_DIR XSMM_DIR CUDA_DIR CUDA_ARCH CUDA_TARGETS MFEM_DIR PETSC_DIR NEK5K_DIR ROCM_DIR HIP_ARCH SYCL_DIR
+  MAGMA_DIR CUTLASS_DIR XSMM_DIR CUDA_DIR CUDA_ARCH CUDA_TARGETS \
+  MFEM_DIR PETSC_DIR NEK5K_DIR ROCM_DIR HIP_ARCH SYCL_DIR \
+  KOKKOS_DIR KOKKOS_CXXFLAGS
 
 # $(call needs_save,CFLAGS) returns true (a nonempty string) if CFLAGS
 # was set on the command line or in config.mk (where it will appear as
