@@ -36,3 +36,5 @@
 #include "ceed-backend-list-magma.h"
 // Requires CUTLASS + CUDA
 #include "ceed-backend-list-cutlass.h"
+// Requires Kokkos + CUDA
+#include "ceed-backend-list-kokkos.h"
