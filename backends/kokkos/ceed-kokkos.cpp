@@ -5,9 +5,7 @@
 //
 // This file is part of CEED:  http://github.com/ceed
 
-#include <ceed.h>
-#include <ceed/backend.h>
-#include <Kokkos_Core.hpp> // import from the kokkos install
+#include "ceed-kokkos.hpp"
 #include <string.h>
 
 //------------------------------------------------------------------------------
@@ -15,7 +13,7 @@
 //------------------------------------------------------------------------------
 static int CeedInit_Kokkos(const char *resource, Ceed ceed) {
   Ceed ceed_ref;
-  char *resource_root; // fromm cuda ref so that device id input is possible
+  char *resource_root; // from cuda ref so that device id input is possible
 
   CeedCallBackend(CeedGetResourceRoot(ceed, resource, ":", &resource_root));
   CeedCheck(!strcmp(resource_root, "/gpu/cuda/kokkos"), ceed, CEED_ERROR_BACKEND, "Kokkos backend cannot use resource: %s", resource);
@@ -27,6 +25,7 @@ static int CeedInit_Kokkos(const char *resource, Ceed ceed) {
 
   CeedCallBackend(CeedInit("/gpu/cuda/ref", &ceed_ref));
   CeedCallBackend(CeedSetDelegate(ceed, ceed_ref));
+  CeedCallBackend(CeedSetBackendFunction(ceed, "Ceed", ceed, "VectorCreate", CeedVectorCreate_Kokkos));
   CeedCallBackend(CeedDestroy(&ceed_ref));
 
   return CEED_ERROR_SUCCESS;
@@ -37,4 +36,5 @@ static int CeedInit_Kokkos(const char *resource, Ceed ceed) {
 //------------------------------------------------------------------------------
 CEED_INTERN int CeedRegister_Kokkos(void) {
   return CeedRegister("/gpu/cuda/kokkos", CeedInit_Kokkos, 120);
+}
 //------------------------------------------------------------------------------
