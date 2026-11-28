@@ -19,4 +19,10 @@ typedef struct {
   bool valid; // has the data been set yet ?
 } CeedVector_Kokkos;
 
+typedef struct{
+#ifdef KOKKOS_ENABLE_CUDA
+  Kokkos:: Cuda *exec; // Kokkos execution instance on cuda-ref (stream handle)
+#endif
+} Ceed_Kokkos;
+
 CEED_INTERN int CeedVectorCreate_Kokkos(CeedSize n, CeedVector vec);

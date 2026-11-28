@@ -141,9 +141,26 @@ static int CeedVectorGetArrayWrite_Kokkos(CeedVector vec, CeedMemType mem_type, 
     }
     impl->valid = true;
     return CEED_ERROR_SUCCESS;
-
 }
 
+//------------------------------------------------------------------------------
+// Sync Array
+//------------------------------------------------------------------------------
+static int CeedVectorSyncArray_Kokkos(CeedVector vec, CeedMemType mem_type){
+    CeedVector_Kokkos *impl;
+    CeedCallBackend(CeedVectorGetData(vec, &impl));
+    switch(mem_type){
+        case CEED_MEM_HOST:{
+            impl->dv->sync_host();
+            break;
+        }
+        case CEED_MEM_DEVICE:{
+            impl->dv->sync_device();
+            break;
+        }
+    }
+    return CEED_ERROR_SUCCESS;
+}
 //------------------------------------------------------------------------------
 // Vector Create
 //------------------------------------------------------------------------------
@@ -158,6 +175,7 @@ int CeedVectorCreate_Kokkos(CeedSize n, CeedVector vec) {
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArrayRead", CeedVectorGetArrayRead_Kokkos));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArray", CeedVectorGetArray_Kokkos));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArrayWrite", CeedVectorGetArrayWrite_Kokkos));
+  CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "SyncArray", CeedVectorSyncArray_Kokkos));
 
   CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedCalloc(1, &impl));
