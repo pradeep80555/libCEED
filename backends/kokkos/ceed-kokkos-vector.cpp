@@ -70,6 +70,81 @@ static int CeedVectorSetArray_Kokkos(CeedVector vec, CeedMemType mem_type, CeedC
 }
 
 //------------------------------------------------------------------------------
+// Shared helper: sync the requested vector to the latest data(if not already) and hand out its pointer to the data
+//------------------------------------------------------------------------------
+static int CeedVectorGetArrayCore_Kokkos(CeedVector vec, CeedMemType mem_type, CeedScalar **array) {
+    CeedVector_Kokkos *impl;
+    CeedCallBackend(CeedVectorGetData(vec, &impl));
+    
+    switch(mem_type){
+        case CEED_MEM_HOST: {
+            impl->dv->sync_host();
+            *array = impl->dv->view_host().data();
+            break;
+        }
+        case CEED_MEM_DEVICE:{
+            impl->dv->sync_device();
+            *array = impl->dv->view_device().data();
+            break;
+        }
+    }
+    return CEED_ERROR_SUCCESS;
+}
+
+//------------------------------------------------------------------------------
+// Get Array- Read only
+//------------------------------------------------------------------------------
+static int CeedVectorGetArrayRead_Kokkos(CeedVector vec, CeedMemType mem_type, const CeedScalar **array){
+    CeedCallBackend(CeedVectorGetArrayCore_Kokkos(vec, mem_type, (CeedScalar **)array));
+    return CEED_ERROR_SUCCESS;
+}
+
+//------------------------------------------------------------------------------
+// Get Array- Read and write
+//------------------------------------------------------------------------------
+static int CeedVectorGetArray_Kokkos(CeedVector vec, CeedMemType mem_type, CeedScalar **array){
+    CeedCallBackend(CeedVectorGetArrayCore_Kokkos(vec,mem_type,array));
+    CeedVector_Kokkos *impl;
+    CeedCallBackend(CeedVectorGetData(vec, &impl));
+
+    switch(mem_type){
+        case CEED_MEM_HOST:{
+            impl->dv->modify_host();
+            break;
+        }
+        case CEED_MEM_DEVICE:{
+            impl->dv->modify_device();
+            break;
+        }
+    }
+    return CEED_ERROR_SUCCESS;
+}
+
+//------------------------------------------------------------------------------
+// Get Array- overwrite regardless of previous state
+//------------------------------------------------------------------------------
+static int CeedVectorGetArrayWrite_Kokkos(CeedVector vec, CeedMemType mem_type, CeedScalar **array){
+    CeedVector_Kokkos *impl;
+    CeedCallBackend(CeedVectorGetData(vec, &impl));
+    impl->dv->clear_sync_state();
+    switch(mem_type){
+        case CEED_MEM_HOST:{
+            impl->dv->modify_host();
+            *array = impl->dv->view_host().data();
+            break;
+        }
+        case CEED_MEM_DEVICE:{
+            impl->dv->modify_device();
+            *array = impl->dv->view_device().data();
+            break;
+        }
+    }
+    impl->valid = true;
+    return CEED_ERROR_SUCCESS;
+
+}
+
+//------------------------------------------------------------------------------
 // Vector Create
 //------------------------------------------------------------------------------
 int CeedVectorCreate_Kokkos(CeedSize n, CeedVector vec) {
@@ -80,6 +155,10 @@ int CeedVectorCreate_Kokkos(CeedSize n, CeedVector vec) {
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "HasValidArray", CeedVectorHasValidArray_Kokkos));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "Destroy", CeedVectorDestroy_Kokkos));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "SetArray", CeedVectorSetArray_Kokkos));
+  CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArrayRead", CeedVectorGetArrayRead_Kokkos));
+  CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArray", CeedVectorGetArray_Kokkos));
+  CeedCallBackend(CeedSetBackendFunction(ceed, "Vector", vec, "GetArrayWrite", CeedVectorGetArrayWrite_Kokkos));
+
   CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedCalloc(1, &impl));
   impl->dv = new CeedDualView_Kokkos("CeedVector_Kokkos", n); // valid = false from previous step (Calloc)
